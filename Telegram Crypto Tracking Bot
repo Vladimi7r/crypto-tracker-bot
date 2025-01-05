@@ -1,0 +1,79 @@
+import os
+import requests
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Get API keys and Telegram bot token
+BOT_TOKEN = os.getenv("7808468056:AAEOqsMwZVvNvp-kGcsFCVRuhzSY60nAkn0")
+ETHERSCAN_API_KEY = os.getenv("NWAG9M567FTV5RBP4JPIYE9KJ6632SH5RW")
+
+# Function to track Ethereum transaction using Etherscan
+def track_ethereum_transaction(txn_hash):
+    url = f"https://api.etherscan.io/api?module=transaction&action=gettxinfo&txhash={txn_hash}&apikey={NWAG9M567FTV5RBP4JPIYE9KJ6632SH5RW}"
+    response = requests.get(url)
+    data = response.json()
+    
+    if data['status'] == '1':
+        txn_data = data['result']
+        return f"Transaction Hash: {txn_data['hash']}\nBlock: {txn_data['blockNumber']}\nFrom: {txn_data['from']}\nTo: {txn_data['to']}\nValue: {txn_data['value']} ETH\nTimestamp: {txn_data['timeStamp']}"
+    else:
+        return "Transaction not found or invalid."
+
+# Function to track Ethereum wallet transactions
+def track_ethereum_wallet(wallet_address):
+    url = f"https://api.etherscan.io/api?module=account&action=txlist&address={wallet_address}&sort=desc&apikey={NWAG9M567FTV5RBP4JPIYE9KJ6632SH5RW}"
+    response = requests.get(url)
+    data = response.json()
+
+    if data['status'] == '1' and 'result' in data:
+        txns = data['result']
+        txn_count = len(txns)
+        return f"Wallet Address: {wallet_address}\nNumber of Transactions: {txn_count}\nLatest Transactions:\n" + "\n".join([f"Hash: {txn['hash']}, Block: {txn['blockNumber']}, Value: {txn['value']} ETH" for txn in txns[:5]])
+    else:
+        return "No transactions found for this wallet."
+
+# Command to start the bot
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Welcome to the Crypto Tracker Bot! Use /track <transaction_id> or /wallet <wallet_address> to track a transaction or wallet.")
+
+# Command to track transactions by transaction ID
+async def track(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if len(context.args) < 1:
+        await update.message.reply_text("Please provide a transaction ID.")
+        return
+    txn_hash = context.args[0]
+    if txn_hash.startswith("0x"):  # Likely Ethereum
+        result = track_ethereum_transaction(txn_hash)
+    else:
+        await update.message.reply_text("Only Ethereum transaction tracking is supported currently.")
+        return
+    await update.message.reply_text(result)
+
+# Command to track wallet by wallet address
+async def wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if len(context.args) < 1:
+        await update.message.reply_text("Please provide a wallet address.")
+        return
+    wallet_address = context.args[0]
+    if wallet_address.startswith("0x"):  # Likely Ethereum
+        result = track_ethereum_wallet(wallet_address)
+    else:
+        await update.message.reply_text("Only Ethereum wallet tracking is supported currently.")
+        return
+    await update.message.reply_text(result)
+
+# Main application setup
+if __name__ == "__main__":
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # Add handlers for commands
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("track", track))
+    application.add_handler(CommandHandler("wallet", wallet))
+
+    print("Bot is running...")
+    application.run_polling()
